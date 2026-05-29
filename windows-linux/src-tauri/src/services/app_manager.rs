@@ -1,0 +1,388 @@
+//! App discovery and uninstall.
+//!
+//! Linux sources, in priority order:
+//!  1. pacman (Arch family) — `pacman -Qi` gives name, version, size
+//!  2. dpkg                  — `dpkg-query -W -f`
+//!  3. rpm                   — `rpm -qa --queryformat`
+//!  4. flatpak               — `flatpak list --app --columns=...`
+//!  5. snap                  — `snap list`
+//!  6. desktop entries        — fallback for AppImages and manually-installed apps
+//!     (only entries not already covered above)
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::process::Command;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AppSource {
+    Pacman,
+    Dpkg,
+    Rpm,
+    Flatpak,
+    Snap,
+    Desktop,
+    Windows,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AppEntry {
+    pub id: String,            // unique identifier per source
+    pub name: String,
+    pub version: Option<String>,
+    pub size_bytes: u64,       // 0 if unknown
+    pub source: AppSource,
+    pub description: Option<String>,
+    pub exec: Option<String>,
+}
+
+#[cfg(target_os = "linux")]
+pub fn list_apps() -> Vec<AppEntry> {
+    let mut apps: Vec<AppEntry> = Vec::new();
+    let mut seen = HashSet::new();
+
+    if which("pacman") {
+        apps.extend(pacman_apps());
+    } else if which("dpkg-query") {
+        apps.extend(dpkg_apps());
+    } else if which("rpm") {
+        apps.extend(rpm_apps());
+    }
+
+    if which("flatpak") {
+        apps.extend(flatpak_apps());
+    }
+    if which("snap") {
+        apps.extend(snap_apps());
+    }
+
+    for a in &apps {
+        seen.insert(a.name.to_lowercase());
+    }
+    for d in desktop_apps() {
+        if !seen.contains(&d.name.to_lowercase()) {
+            apps.push(d);
+        }
+    }
+
+    apps.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes).then(a.name.cmp(&b.name)));
+    apps
+}
+
+#[cfg(target_os = "windows")]
+pub fn list_apps() -> Vec<AppEntry> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    // Three locations cover ~all conventional installers.
+    let sources: &[(winreg::HKEY, &str)] = &[
+        (HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+    ];
+
+    let mut apps: Vec<AppEntry> = Vec::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+
+    for (root, path) in sources {
+        let root_key = RegKey::predef(*root);
+        let Ok(parent) = root_key.open_subkey(*path) else { continue };
+        for sub_name in parent.enum_keys().flatten() {
+            let Ok(k) = parent.open_subkey(&sub_name) else { continue };
+
+            let name: String = k.get_value("DisplayName").unwrap_or_default();
+            if name.is_empty() { continue; }
+            // De-duplicate by display name across hives (32/64-bit mirror, per-user dupes)
+            if !seen.insert(name.to_lowercase()) { continue; }
+
+            // Skip Windows Update entries and system components.
+            let sys_comp: u32 = k.get_value("SystemComponent").unwrap_or(0);
+            if sys_comp == 1 { continue; }
+            if name.starts_with("Update for")
+                || name.starts_with("Security Update")
+                || name.starts_with("Hotfix")
+                || name.contains("KB") && name.contains("Microsoft")
+            {
+                continue;
+            }
+
+            let version: String = k.get_value("DisplayVersion").unwrap_or_default();
+            let publisher: String = k.get_value("Publisher").unwrap_or_default();
+            let size_kb: u32 = k.get_value("EstimatedSize").unwrap_or(0);
+            let uninstall: String = k.get_value("UninstallString").unwrap_or_default();
+            let quiet_uninstall: String = k.get_value("QuietUninstallString").unwrap_or_default();
+            let install_loc: String = k.get_value("InstallLocation").unwrap_or_default();
+
+            apps.push(AppEntry {
+                id: if quiet_uninstall.is_empty() { uninstall.clone() } else { quiet_uninstall.clone() },
+                name,
+                version: if version.is_empty() { None } else { Some(version) },
+                size_bytes: (size_kb as u64) * 1024,
+                source: AppSource::Windows,
+                description: if publisher.is_empty() { None } else { Some(publisher) },
+                exec: if install_loc.is_empty() { None } else { Some(install_loc) },
+            });
+        }
+    }
+
+    apps.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    apps
+}
+
+#[cfg(target_os = "linux")]
+pub fn uninstall(source: AppSource, id: &str) -> anyhow::Result<()> {
+    let status = match source {
+        AppSource::Pacman => Command::new("pkexec").args(["pacman", "-Rns", "--noconfirm", id]).status(),
+        AppSource::Dpkg => Command::new("pkexec").args(["apt-get", "remove", "--purge", "-y", id]).status(),
+        AppSource::Rpm => Command::new("pkexec").args(["dnf", "remove", "-y", id]).status(),
+        AppSource::Flatpak => Command::new("flatpak").args(["uninstall", "-y", id]).status(),
+        AppSource::Snap => Command::new("pkexec").args(["snap", "remove", id]).status(),
+        AppSource::Desktop => return Err(anyhow::anyhow!("Apps registrados apenas via .desktop precisam ser removidos manualmente")),
+        AppSource::Windows => return Err(anyhow::anyhow!("Pacotes Windows não desinstaláveis no Linux")),
+    }?;
+    if !status.success() {
+        return Err(anyhow::anyhow!("uninstaller saiu com código {:?}", status.code()));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+pub fn uninstall(_source: AppSource, id: &str) -> anyhow::Result<()> {
+    // The `id` is the UninstallString from the registry. It can be either:
+    //   MsiExec.exe /X{GUID}    — needs to be parsed and have /quiet appended
+    //   "C:\Path\uninstaller.exe" /S
+    //   C:\Path\uninstaller.exe
+    // We hand the user's shell off to it via cmd /C so quoting works correctly.
+    let status = Command::new("cmd")
+        .args(&["/C", id])
+        .status()?;
+    if !status.success() {
+        return Err(anyhow::anyhow!("uninstaller exited with code {:?}", status.code()));
+    }
+    Ok(())
+}
+
+// --- Source backends -------------------------------------------------------
+
+#[cfg(target_os = "linux")]
+fn pacman_apps() -> Vec<AppEntry> {
+    // -Qi prints multi-line records, blank-separated.
+    let Ok(out) = Command::new("pacman").args(["-Qi"]).output() else { return vec![] };
+    if !out.status.success() { return vec![]; }
+    let text = String::from_utf8_lossy(&out.stdout);
+
+    let mut apps = Vec::new();
+    let mut name = String::new();
+    let mut version = String::new();
+    let mut desc = String::new();
+    let mut size = 0u64;
+
+    let flush = |apps: &mut Vec<AppEntry>, name: &mut String, version: &mut String, desc: &mut String, size: &mut u64| {
+        if !name.is_empty() {
+            apps.push(AppEntry {
+                id: name.clone(),
+                name: std::mem::take(name),
+                version: if version.is_empty() { None } else { Some(std::mem::take(version)) },
+                size_bytes: *size,
+                source: AppSource::Pacman,
+                description: if desc.is_empty() { None } else { Some(std::mem::take(desc)) },
+                exec: None,
+            });
+            *size = 0;
+        }
+    };
+
+    for line in text.lines() {
+        if line.is_empty() {
+            flush(&mut apps, &mut name, &mut version, &mut desc, &mut size);
+            continue;
+        }
+        if let Some(v) = line.strip_prefix("Name") { name = field(v); }
+        else if let Some(v) = line.strip_prefix("Version") { version = field(v); }
+        else if let Some(v) = line.strip_prefix("Description") { desc = field(v); }
+        else if let Some(v) = line.strip_prefix("Installed Size") {
+            size = parse_pacman_size(&field(v));
+        }
+    }
+    flush(&mut apps, &mut name, &mut version, &mut desc, &mut size);
+    apps
+}
+
+#[cfg(target_os = "linux")]
+fn dpkg_apps() -> Vec<AppEntry> {
+    let Ok(out) = Command::new("dpkg-query")
+        .args(["-W", "-f", "${Package}\t${Version}\t${Installed-Size}\t${binary:Summary}\n"])
+        .output() else { return vec![] };
+    if !out.status.success() { return vec![]; }
+    String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| {
+        let mut parts = l.splitn(4, '\t');
+        let name = parts.next()?.to_string();
+        let version = parts.next().map(|s| s.to_string());
+        let kb: u64 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+        let desc = parts.next().map(|s| s.to_string());
+        Some(AppEntry {
+            id: name.clone(), name, version,
+            size_bytes: kb * 1024, source: AppSource::Dpkg, description: desc, exec: None,
+        })
+    }).collect()
+}
+
+#[cfg(target_os = "linux")]
+fn rpm_apps() -> Vec<AppEntry> {
+    let Ok(out) = Command::new("rpm")
+        .args(["-qa", "--queryformat", "%{NAME}\t%{VERSION}\t%{SIZE}\t%{SUMMARY}\n"])
+        .output() else { return vec![] };
+    if !out.status.success() { return vec![]; }
+    String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| {
+        let mut parts = l.splitn(4, '\t');
+        let name = parts.next()?.to_string();
+        let version = parts.next().map(|s| s.to_string());
+        let bytes: u64 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+        let desc = parts.next().map(|s| s.to_string());
+        Some(AppEntry {
+            id: name.clone(), name, version,
+            size_bytes: bytes, source: AppSource::Rpm, description: desc, exec: None,
+        })
+    }).collect()
+}
+
+#[cfg(target_os = "linux")]
+fn flatpak_apps() -> Vec<AppEntry> {
+    let Ok(out) = Command::new("flatpak")
+        .args(["list", "--app", "--columns=application,name,version,size"])
+        .output() else { return vec![] };
+    if !out.status.success() { return vec![]; }
+    String::from_utf8_lossy(&out.stdout).lines().filter_map(|l| {
+        let parts: Vec<_> = l.split('\t').collect();
+        if parts.len() < 2 { return None; }
+        let id = parts[0].to_string();
+        let name = parts[1].to_string();
+        let version = parts.get(2).map(|s| s.to_string()).filter(|s| !s.is_empty());
+        let size = parts.get(3).map(|s| parse_human_size(s)).unwrap_or(0);
+        Some(AppEntry {
+            id, name, version, size_bytes: size,
+            source: AppSource::Flatpak, description: None, exec: None,
+        })
+    }).collect()
+}
+
+#[cfg(target_os = "linux")]
+fn snap_apps() -> Vec<AppEntry> {
+    let Ok(out) = Command::new("snap").args(["list"]).output() else { return vec![] };
+    if !out.status.success() { return vec![]; }
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines().skip(1).filter_map(|l| {
+        let parts: Vec<_> = l.split_whitespace().collect();
+        if parts.len() < 2 { return None; }
+        Some(AppEntry {
+            id: parts[0].to_string(),
+            name: parts[0].to_string(),
+            version: parts.get(1).map(|s| s.to_string()),
+            size_bytes: 0,
+            source: AppSource::Snap,
+            description: None,
+            exec: None,
+        })
+    }).collect()
+}
+
+#[cfg(target_os = "linux")]
+fn desktop_apps() -> Vec<AppEntry> {
+    let mut out = Vec::new();
+    let mut dirs: Vec<PathBuf> = vec![
+        PathBuf::from("/usr/share/applications"),
+        PathBuf::from("/var/lib/flatpak/exports/share/applications"),
+    ];
+    if let Some(h) = dirs::data_local_dir() {
+        dirs.push(h.join("applications"));
+    }
+    for d in dirs {
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("desktop") { continue; }
+            let Ok(text) = std::fs::read_to_string(&p) else { continue };
+            let mut name = String::new();
+            let mut exec = String::new();
+            let mut nodisplay = false;
+            for line in text.lines() {
+                if let Some(v) = line.strip_prefix("Name=") { if name.is_empty() { name = v.into(); } }
+                else if let Some(v) = line.strip_prefix("Exec=") { if exec.is_empty() { exec = v.into(); } }
+                else if line == "NoDisplay=true" || line == "Hidden=true" { nodisplay = true; }
+                else if line.starts_with('[') && !name.is_empty() { break; } // only main section
+            }
+            if name.is_empty() || nodisplay { continue; }
+            out.push(AppEntry {
+                id: p.to_string_lossy().to_string(),
+                name, version: None, size_bytes: 0,
+                source: AppSource::Desktop,
+                description: None,
+                exec: if exec.is_empty() { None } else { Some(exec) },
+            });
+        }
+    }
+    out
+}
+
+// --- parsing helpers -------------------------------------------------------
+
+fn field(s: &str) -> String {
+    s.split_once(':').map(|(_, v)| v.trim().to_string()).unwrap_or_else(|| s.trim().to_string())
+}
+
+fn parse_pacman_size(s: &str) -> u64 {
+    // "12.34 MiB" / "456.78 KiB" / "9.0 B"
+    let s = s.trim();
+    let mut num = String::new();
+    let mut unit = String::new();
+    let mut at_unit = false;
+    for ch in s.chars() {
+        if ch.is_ascii_digit() || ch == '.' { num.push(ch); }
+        else if ch.is_whitespace() { at_unit = true; }
+        else if at_unit { unit.push(ch); }
+    }
+    let val: f64 = num.parse().unwrap_or(0.0);
+    let mult = match unit.to_ascii_uppercase().as_str() {
+        "KIB" | "KB" | "K" => 1024.0,
+        "MIB" | "MB" | "M" => 1024.0 * 1024.0,
+        "GIB" | "GB" | "G" => 1024.0_f64.powi(3),
+        "TIB" | "TB" | "T" => 1024.0_f64.powi(4),
+        _ => 1.0,
+    };
+    (val * mult) as u64
+}
+
+fn parse_human_size(s: &str) -> u64 {
+    let s = s.trim();
+    if s.is_empty() { return 0; }
+    let mut num = String::new();
+    let mut unit = String::new();
+    let mut at_unit = false;
+    for ch in s.chars() {
+        if ch.is_ascii_digit() || ch == '.' || ch == ',' { num.push(if ch == ',' { '.' } else { ch }); }
+        else { at_unit = true; }
+        if at_unit && !ch.is_whitespace() { unit.push(ch); }
+    }
+    let val: f64 = num.parse().unwrap_or(0.0);
+    let mult = match unit.trim().to_ascii_uppercase().as_str() {
+        "B" => 1.0,
+        "KB" | "K" => 1000.0,
+        "MB" | "M" => 1000.0 * 1000.0,
+        "GB" | "G" => 1000.0_f64.powi(3),
+        "KIB" => 1024.0,
+        "MIB" => 1024.0 * 1024.0,
+        "GIB" => 1024.0_f64.powi(3),
+        _ => 1.0,
+    };
+    (val * mult) as u64
+}
+
+fn which(bin: &str) -> bool {
+    Command::new("which").arg(bin)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}

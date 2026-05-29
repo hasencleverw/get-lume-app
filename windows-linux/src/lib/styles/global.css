@@ -1,0 +1,82 @@
+@import './tokens.css';
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-1);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  user-select: none;
+}
+
+#lume-root {
+  height: 100%;
+  display: flex;
+}
+
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, select, textarea { font: inherit; color: inherit; }
+img, svg { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+
+/* Ambient background gradients matching the macOS AppBackground */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 6%,  rgba(91, 63, 216, 0.20) 0, transparent 42%),
+    radial-gradient(circle at 88% 28%, rgba(45, 95, 208, 0.13) 0, transparent 45%),
+    radial-gradient(circle at 52% 96%, rgba(0, 201, 167, 0.08) 0, transparent 52%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scrollbar — subtle, dark-first */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.14); border: 2px solid transparent; background-clip: padding-box; }
+
+/* Selection */
+::selection { background: var(--accent-soft); color: #fff; }
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Utility classes used across views */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.glass {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.glass-strong {
+  background: var(--card-bg-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+}
+
+/* Headline scale — editorial typography */
+.h-display { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.h-1 { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; }
+.h-2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.h-3 { font-size: 14px; font-weight: 600; }
+.subtle { color: var(--text-secondary); }
+.muted { color: var(--text-muted); }

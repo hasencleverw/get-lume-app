@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>pt_BR</string>
+    <key>CFBundleExecutable</key>
+    <string>Lume</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.lume.mac</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Lume for Mac</string>
+    <key>CFBundleDisplayName</key>
+    <string>Lume</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025 Lume. All rights reserved.</string>
+
+    <!-- Privacy usage descriptions -->
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Lume precisa acessar a pasta Desktop para identificar arquivos grandes e desnecessários.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Lume precisa acessar a pasta Documentos para análise de arquivos grandes e verificação de ameaças.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Lume precisa acessar a pasta Downloads para identificar arquivos antigos que podem ser removidos.</string>
+    <key>NSMusicUsageDescription</key>
+    <string>Lume precisa acessar a pasta Música para identificar arquivos grandes que podem ser removidos.</string>
+    <key>NSPicturesUsageDescription</key>
+    <string>Lume precisa acessar a pasta Imagens para identificar fotos grandes que podem ser removidas.</string>
+    <key>NSMoviesUsageDescription</key>
+    <string>Lume precisa acessar a pasta Filmes para identificar vídeos grandes que podem ser removidos.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Lume precisa acessar volumes removíveis para análise de espaço em disco.</string>
+    <key>NSSystemAdministrationUsageDescription</key>
+    <string>Lume precisa de privilégios para remover arquivos de sistema e malware detectado.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Lume usa AppleScript para executar tarefas de manutenção privilegiadas, como remover arquivos de Launch Agents detectados como ameaças.</string>
+</dict>
+</plist>

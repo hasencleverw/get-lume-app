@@ -1,0 +1,70 @@
+/* Lume design tokens — ported 1:1 from macOS app + landing reference */
+:root {
+  /* Surfaces */
+  --bg-1: #0B0B1E;
+  --bg-2: #07071A;
+  --sidebar-bg: #0F0F22;
+  --card-bg: rgba(255, 255, 255, 0.045);
+  --card-bg-strong: rgba(255, 255, 255, 0.065);
+  --card-hover: rgba(255, 255, 255, 0.085);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  /* Text */
+  --text: #ffffff;
+  --text-primary: rgba(255, 255, 255, 0.96);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-muted: rgba(255, 255, 255, 0.4);
+  --text-faint: rgba(255, 255, 255, 0.28);
+
+  /* Brand */
+  --accent: #8B6BF8;
+  --accent-2: #5B3FD8;
+  --accent-soft: rgba(139, 107, 248, 0.18);
+  --accent-glow: rgba(139, 107, 248, 0.35);
+
+  /* Section gradients */
+  --dashboard-1: #8B6BF8;  --dashboard-2: #5B3FD8;
+  --memory-1:    #4D8FFF;  --memory-2:    #2D5FD0;
+  --disk-1:      #FF8C38;  --disk-2:      #D85C10;
+  --space-1:     #00C9A7;  --space-2:     #00957A;
+  --protect-1:   #FF4D5E;  --protect-2:   #CC2035;
+  --apps-1:      #34C87A;  --apps-2:      #1A9A55;
+  --perf-1:      #FFB830;  --perf-2:      #D08A0A;
+
+  /* Status */
+  --success: #00C9A7;
+  --warning: #F59E0B;
+  --danger: #FF4D5E;
+  --info: #4D8FFF;
+
+  /* Radii */
+  --r-sm: 7px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.55);
+  --shadow-accent: 0 8px 22px rgba(139, 107, 248, 0.32);
+  --shadow-pop: 0 18px 40px -12px rgba(0, 0, 0, 0.6);
+
+  /* Type */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display",
+               "Segoe UI Variable", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "Roboto Mono",
+               "Menlo", monospace;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0.05, 0.36, 1);
+  --dur-fast: 130ms;
+  --dur-med: 220ms;
+  --dur-slow: 360ms;
+
+  /* Layout */
+  --sidebar-w: 200px;
+  --header-h: 72px;
+  --content-pad: 28px;
+}
