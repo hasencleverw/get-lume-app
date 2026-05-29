@@ -94,22 +94,21 @@ Lume is built natively per platform for the best UX and the smallest binary:
 
 ```
                        ┌─────────────────────────┐
-                       │   Shared design system   │
-                       │   (HTML/CSS landing)    │
+                       │   Shared service        │
+                       │   architecture          │
                        └────────────┬────────────┘
                                     │
-       ┌────────────────────────────┼────────────────────────────┐
-       │                            │                            │
-┌──────▼───────┐            ┌───────▼────────┐           ┌──────▼─────┐
-│   macOS      │            │    Windows     │           │    Linux   │
-│ Swift +      │            │  C# / WinUI 3  │           │ GTK4 / Qt  │
-│ SwiftUI      │            │                │           │            │
-└──────────────┘            └────────────────┘           └────────────┘
+            ┌───────────────────────┴───────────────────────┐
+            │                                               │
+    ┌───────▼─────────┐                ┌────────────────────▼─┐
+    │   macOS         │                │   Windows + Linux    │
+    │   Swift 6 +     │                │   Tauri 2 +          │
+    │   SwiftUI +     │                │   Rust +             │
+    │   SPM           │                │   Svelte 5           │
+    └─────────────────┘                └──────────────────────┘
 ```
 
-This repository hosts both the **macOS** reference (`macos/`, Swift 6 / SwiftUI / SPM) and the **Windows + Linux** port (`windows-linux/`, Tauri 2 / Rust + SvelteKit) — a 1:1 mirror of the Swift services. Installer artifacts are attached to the [Releases page](https://github.com/hasencleverw/get-lume-app/releases).
-
-> **Current implementation status:** Windows and Linux currently ship through the shared Tauri 2 port. Native C# / WinUI 3 (Windows) and GTK4 (Linux) implementations are planned for future major versions, following the same service architecture as the Swift reference.
+This repository hosts both the **macOS** reference (`macos/`, Swift 6 / SwiftUI / SPM) and the **Windows + Linux** port (`windows-linux/`, Tauri 2 / Rust + Svelte 5) — a 1:1 mirror of the Swift services. Installer artifacts are attached to the [Releases page](https://github.com/hasencleverw/get-lume-app/releases).
 
 ### macOS source layout
 
@@ -194,7 +193,7 @@ The Tauri port preserves the macOS service layer 1:1. Bug fixes in the Swift ref
 
 | macOS (Swift) | Windows + Linux (Rust) | What it does |
 |---|---|---|
-| `Services/SystemMonitor.swift` | `services/system_monitor.rs` | CPU / RAM / disk stats |
+| `Services/SystemMonitor.swift` | `services/system_monitor.rs` + `services/memory_cleaner.rs` | CPU / RAM / disk stats + `purge` |
 | `Services/DiskScanner.swift` | `services/disk_scanner.rs` | Junk categories + safety policies |
 | `Services/LargeFilesScanner.swift` | `services/large_files.rs` | Space Lens engine |
 | `Services/MalwareScanner.swift` | `services/protection.rs` | 4-layer threat detection |
@@ -202,6 +201,7 @@ The Tauri port preserves the macOS service layer 1:1. Bug fixes in the Swift ref
 | `Services/PermissionsManager.swift` | `services/permissions.rs` *(in progress)* | Privilege / capability detection |
 | `Services/PrivilegedExecutor.swift` | `services/privileged.rs` *(in progress)* | Elevated session cache |
 | `Services/DonationManager.swift` | `services/donation.rs` | HMAC-SHA256 donor key |
+| `Services/UpdaterService.swift` | `services/updater.rs` | GitHub Releases polling (≤ 1×/week, no auto-install) |
 | `Services/Localization.swift` | SvelteKit `i18n` + locale files | 220+ keys in PT / EN / ES |
 
 ## Build from source (macOS)

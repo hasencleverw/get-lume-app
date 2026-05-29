@@ -194,7 +194,7 @@ O port Tauri preserva a camada de serviços do macOS 1:1. Correções no Swift d
 
 | macOS (Swift) | Windows + Linux (Rust) | O que faz |
 |---|---|---|
-| `Services/SystemMonitor.swift` | `services/system_monitor.rs` | Stats de CPU / RAM / disco |
+| `Services/SystemMonitor.swift` | `services/system_monitor.rs` + `services/memory_cleaner.rs` | Stats de CPU / RAM / disco + `purge` |
 | `Services/DiskScanner.swift` | `services/disk_scanner.rs` | Categorias de junk + políticas |
 | `Services/LargeFilesScanner.swift` | `services/large_files.rs` | Motor do Space Lens |
 | `Services/MalwareScanner.swift` | `services/protection.rs` | Detecção de ameaças em 4 camadas |
