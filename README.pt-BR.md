@@ -94,20 +94,21 @@ O Lume é construído nativamente em cada plataforma para a melhor experiência 
 
 ```
                        ┌─────────────────────────┐
-                       │  Sistema de design       │
-                       │  compartilhado (landing) │
+                       │   Arquitetura de        │
+                       │   serviços compartilhada│
                        └────────────┬────────────┘
                                     │
-       ┌────────────────────────────┼────────────────────────────┐
-       │                            │                            │
-┌──────▼───────┐            ┌───────▼────────┐           ┌──────▼─────┐
-│   macOS      │            │    Windows     │           │    Linux   │
-│ Swift +      │            │  C# / WinUI 3  │           │ GTK4 / Qt  │
-│ SwiftUI      │            │                │           │            │
-└──────────────┘            └────────────────┘           └────────────┘
+            ┌───────────────────────┴───────────────────────┐
+            │                                               │
+    ┌───────▼─────────┐                ┌────────────────────▼─┐
+    │   macOS         │                │   Windows + Linux    │
+    │   Swift 6 +     │                │   Tauri 2 +          │
+    │   SwiftUI +     │                │   Rust +             │
+    │   SPM           │                │   Svelte 5           │
+    └─────────────────┘                └──────────────────────┘
 ```
 
-Este repositório hospeda tanto a **referência macOS** (`macos/`, Swift 6 / SwiftUI / SPM) quanto o **port Windows + Linux** (`windows-linux/`, Tauri 2 / Rust + SvelteKit) — um espelho 1:1 dos serviços Swift. Os instaladores são anexados à [página de Releases](https://github.com/hasencleverw/get-lume-app/releases).
+Este repositório hospeda tanto a **referência macOS** (`macos/`, Swift 6 / SwiftUI / SPM) quanto o **port Windows + Linux** (`windows-linux/`, Tauri 2 / Rust + Svelte 5) — um espelho 1:1 dos serviços Swift. Os instaladores são anexados à [página de Releases](https://github.com/hasencleverw/get-lume-app/releases).
 
 > **Status atual da implementação:** Windows e Linux atualmente são entregues pelo port compartilhado em Tauri 2. Implementações nativas em C# / WinUI 3 (Windows) e GTK4 (Linux) estão planejadas para versões maiores futuras, seguindo a mesma arquitetura de serviços da referência Swift.
 
