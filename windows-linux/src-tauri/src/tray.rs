@@ -56,9 +56,13 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
         let handle = app.handle().clone();
         window.on_window_event(move |event| match event {
             WindowEvent::CloseRequested { api, .. } => {
-                // Veto the close — send to tray instead.
-                api.prevent_close();
-                hide_main(&handle);
+                // Honor user preference: if "close to tray" is off, let the
+                // close actually go through. Otherwise hide.
+                let settings = crate::services::settings::load();
+                if settings.close_to_tray {
+                    api.prevent_close();
+                    hide_main(&handle);
+                }
             }
             WindowEvent::Resized(_) => {
                 // Minimize is reported as a resize where the window enters the

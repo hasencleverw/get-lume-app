@@ -8,6 +8,7 @@
   import ProtectionView from '$lib/views/ProtectionView.svelte';
   import ApplicationsView from '$lib/views/ApplicationsView.svelte';
   import PerformanceView from '$lib/views/PerformanceView.svelte';
+  import SettingsView from '$lib/views/SettingsView.svelte';
   import { navigation } from '$lib/stores/navigation.svelte';
 
   const section = $derived(navigation.current);
@@ -36,6 +37,8 @@
       <ApplicationsView />
     {:else if section === 'performance'}
       <PerformanceView />
+    {:else if section === 'settings'}
+      <SettingsView />
     {/if}
   </main>
 </div>

@@ -5,7 +5,8 @@ export type SectionId =
   | 'space'
   | 'protection'
   | 'apps'
-  | 'performance';
+  | 'performance'
+  | 'settings';
 
 export interface Section {
   id: SectionId;

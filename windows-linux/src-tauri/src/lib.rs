@@ -69,6 +69,11 @@ pub fn run() {
             commands::performance::perf_list_startup,
             commands::performance::perf_toggle_startup,
             commands::protection::protection_scan,
+            commands::settings::settings_get,
+            commands::settings::settings_set,
+            commands::settings::settings_app_info,
+            commands::settings::settings_autostart_enabled,
+            commands::settings::settings_set_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Lume");

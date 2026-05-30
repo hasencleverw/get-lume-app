@@ -157,3 +157,23 @@ export const donationApi = {
   disable:     () => invoke<DonationState>('donation_disable_reminders'),
   applyKey:    (key: string) => invoke<DonationState>('donation_apply_key', { key })
 };
+
+export type Language = 'pt' | 'en';
+export interface Settings {
+  language: Language;
+  close_to_tray: boolean;
+  start_minimized: boolean;
+}
+export interface AppInfo {
+  version: string;
+  repo_url: string;
+  homepage: string;
+  license: string;
+}
+export const settingsApi = {
+  get:               () => invoke<Settings>('settings_get'),
+  set:               (settings: Settings) => invoke<Settings>('settings_set', { settings }),
+  appInfo:           () => invoke<AppInfo>('settings_app_info'),
+  autostartEnabled:  () => invoke<boolean>('settings_autostart_enabled'),
+  setAutostart:      (enabled: boolean) => invoke<boolean>('settings_set_autostart', { enabled })
+};

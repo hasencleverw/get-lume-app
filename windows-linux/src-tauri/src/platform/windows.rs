@@ -66,3 +66,11 @@ pub fn flush_dns() -> Result<()> {
 pub fn distro_pretty_name() -> String {
     "Windows".into()
 }
+
+pub fn is_autostart_enabled() -> bool {
+    false // implemented in the Windows phase via HKCU\…\Run
+}
+
+pub fn set_autostart(_enabled: bool) -> Result<()> {
+    Err(anyhow!("Windows autostart not implemented yet"))
+}

@@ -1,12 +1,24 @@
 <script lang="ts">
-  import { SECTIONS } from '$lib/sections';
+  import { SECTIONS, type SectionId } from '$lib/sections';
   import { navigation } from '$lib/stores/navigation.svelte';
   import { systemMetrics } from '$lib/stores/metrics.svelte';
   import { donation } from '$lib/stores/donation.svelte';
   import { updater } from '$lib/stores/updater.svelte';
+  import { i18n } from '$lib/stores/i18n.svelte';
   import { formatPercent } from '$lib/services/format';
 
   const currentSection = $derived(navigation.current);
+
+  const SECTION_LABEL_KEY: Record<SectionId, string> = {
+    dashboard:   'sidebar.smartScan',
+    memory:      'sidebar.memory',
+    disk:        'sidebar.disk',
+    space:       'sidebar.space',
+    protection:  'sidebar.protection',
+    apps:        'sidebar.apps',
+    performance: 'sidebar.performance',
+    settings:    'sidebar.settings'
+  };
 
   const ramPct = $derived(
     systemMetrics.metrics
@@ -22,9 +34,9 @@
 
   const issues = $derived.by(() => {
     const out: string[] = [];
-    if (cpuPct >= 80) out.push('CPU acima de 80%');
-    if (ramPct >= 80) out.push('RAM acima de 80%');
-    if (diskPct >= 90) out.push('Disco acima de 90%');
+    if (cpuPct >= 80) out.push(i18n.t('sidebar.issues.cpu'));
+    if (ramPct >= 80) out.push(i18n.t('sidebar.issues.ram'));
+    if (diskPct >= 90) out.push(i18n.t('sidebar.issues.disk'));
     return out;
   });
   const healthy = $derived(issues.length === 0);
@@ -46,7 +58,7 @@
             <path d={section.iconPath} />
           </svg>
         </span>
-        <span class="label">{section.label}</span>
+        <span class="label">{i18n.t(SECTION_LABEL_KEY[section.id])}</span>
       </button>
     {/each}
   </nav>
@@ -54,7 +66,7 @@
   <div class="spacer"></div>
 
   {#if updater.shouldShowBanner}
-    <button class="update-banner" onclick={() => updater.openRelease()} title="Ver release no GitHub">
+    <button class="update-banner" onclick={() => updater.openRelease()} title={i18n.t('sidebar.tooltipUpdate')}>
       <span class="badge-icon">
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3" />
@@ -64,7 +76,7 @@
         </svg>
       </span>
       <div class="banner-body">
-        <span class="banner-title">Atualização disponível</span>
+        <span class="banner-title">{i18n.t('sidebar.updateAvailable')}</span>
         <span class="banner-version">v{updater.status?.latest}</span>
       </div>
       <span
@@ -73,7 +85,7 @@
         tabindex="0"
         onclick={(e) => { e.stopPropagation(); updater.closeBanner(); }}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); updater.closeBanner(); } }}
-        title="Fechar"
+        title={i18n.t('sidebar.tooltipDismiss')}
       >×</span>
     </button>
   {/if}
@@ -81,8 +93,8 @@
   <div class="health" class:warn={!healthy}>
     <div class="row-head">
       <span class="dot" class:ok={healthy}></span>
-      <span class="title">Saúde do sistema</span>
-      <span class="state">{healthy ? 'Boa' : 'Atenção'}</span>
+      <span class="title">{i18n.t('sidebar.healthTitle')}</span>
+      <span class="state">{healthy ? i18n.t('sidebar.healthOk') : i18n.t('sidebar.healthWarn')}</span>
     </div>
     {#if !healthy}
       <ul class="issues">
@@ -92,25 +104,25 @@
       </ul>
     {/if}
     <div class="stats">
-      <div><b class="mono">{formatPercent(cpuPct)}</b><span>CPU</span></div>
-      <div><b class="mono">{formatPercent(ramPct)}</b><span>RAM</span></div>
-      <div><b class="mono">{formatPercent(diskPct)}</b><span>Disco</span></div>
+      <div><b class="mono">{formatPercent(cpuPct)}</b><span>{i18n.t('sidebar.cpu')}</span></div>
+      <div><b class="mono">{formatPercent(ramPct)}</b><span>{i18n.t('sidebar.ram')}</span></div>
+      <div><b class="mono">{formatPercent(diskPct)}</b><span>{i18n.t('sidebar.disk_short')}</span></div>
     </div>
   </div>
 
-  <button class="footer-btn donate" type="button" onclick={() => donation.openManually()} title={donation.state.has_donated ? 'Obrigado pelo apoio ❤️' : 'Apoiar o projeto'}>
+  <button class="footer-btn donate" type="button" onclick={() => donation.openManually()} title={donation.state.has_donated ? '❤️' : i18n.t('sidebar.donate')}>
     <svg viewBox="0 0 24 24" width="14" height="14" fill={donation.state.has_donated ? '#FF6B9D' : 'none'} stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 21s-7-4.35-9.5-9.5C.5 7 4 3 7 3c2 0 3.5 1 5 3 1.5-2 3-3 5-3 3 0 6.5 4 4.5 8.5C19 16.65 12 21 12 21z" />
     </svg>
-    <span>{donation.state.has_donated ? 'Doador' : 'Apoiar'}</span>
+    <span>{donation.state.has_donated ? i18n.t('sidebar.donor') : i18n.t('sidebar.donate')}</span>
   </button>
 
-  <button class="footer-btn" type="button">
+  <button class="footer-btn" class:active={currentSection === 'settings'} type="button" onclick={() => navigation.go('settings')}>
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4 16.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H2.9a2 2 0 1 1 0-4H3a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V2.9a2 2 0 1 1 4 0V3a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
     </svg>
-    <span>Configurações</span>
+    <span>{i18n.t('sidebar.settings')}</span>
   </button>
 </aside>
 
@@ -200,6 +212,7 @@
   }
   .footer-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.04); }
   .footer-btn.donate:hover { color: #FF6B9D; }
+  .footer-btn.active { color: #fff; background: rgba(255, 255, 255, 0.06); }
 
   .update-banner {
     display: grid;

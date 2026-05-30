@@ -51,6 +51,61 @@ pub fn flush_dns() -> Result<()> {
     Ok(())
 }
 
+// ============================================================================
+// XDG autostart helpers
+// ============================================================================
+//
+// Linux convention: a `.desktop` file in `~/.config/autostart` is launched
+// by the session manager on login. Adding/removing the file toggles
+// autostart at the user level, no system-wide changes or root needed.
+
+fn autostart_desktop_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|p| p.join("autostart").join("lume.desktop"))
+}
+
+pub fn is_autostart_enabled() -> bool {
+    autostart_desktop_path().is_some_and(|p| p.exists())
+}
+
+pub fn set_autostart(enabled: bool) -> Result<()> {
+    let Some(p) = autostart_desktop_path() else {
+        return Err(anyhow!("no XDG config dir"));
+    };
+    if !enabled {
+        if p.exists() {
+            std::fs::remove_file(&p).with_context(|| format!("rm {}", p.display()))?;
+        }
+        return Ok(());
+    }
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    // Prefer the system-installed path; fall back to whatever Lume was launched as.
+    let exec = if Path::new("/usr/bin/lume").exists() {
+        "/usr/bin/lume".to_string()
+    } else if let Some(home) = dirs::home_dir() {
+        let local = home.join(".local").join("bin").join("lume");
+        if local.exists() {
+            local.to_string_lossy().into_owned()
+        } else {
+            "lume".to_string()
+        }
+    } else {
+        "lume".to_string()
+    };
+    let body = format!(
+        "[Desktop Entry]\n\
+         Type=Application\n\
+         Name=Lume\n\
+         Exec={exec}\n\
+         Icon=lume\n\
+         Terminal=false\n\
+         X-GNOME-Autostart-enabled=true\n\
+         Comment=Lume — System Cleaner\n"
+    );
+    std::fs::write(&p, body).with_context(|| format!("write {}", p.display()))
+}
+
 /// Distribution label, parsed from /etc/os-release.
 pub fn distro_pretty_name() -> String {
     std::fs::read_to_string("/etc/os-release")

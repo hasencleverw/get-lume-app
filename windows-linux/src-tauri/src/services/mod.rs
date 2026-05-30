@@ -5,5 +5,6 @@ pub mod large_files;
 pub mod memory_cleaner;
 pub mod performance;
 pub mod protection;
+pub mod settings;
 pub mod system_monitor;
 pub mod updater;
