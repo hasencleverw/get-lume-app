@@ -209,7 +209,7 @@
       <header class="card-head"><h2 class="h-2">{i18n.t('settings.about.title')}</h2></header>
       <div class="about-body">
         <div class="about-brand">
-          <span class="logo"></span>
+          <img class="logo" src="/lume-icon.png" alt="Lume" />
           <div>
             <b>Lume</b>
             <span class="mono">v{settings.appInfo?.version ?? '—'}</span>
@@ -362,9 +362,9 @@
   .about-body { display: flex; flex-direction: column; gap: 14px; }
   .about-brand { display: flex; align-items: center; gap: 12px; }
   .about-brand .logo {
-    width: 26px; height: 26px; border-radius: 7px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    box-shadow: 0 4px 12px rgba(139,107,248,0.32);
+    width: 36px; height: 36px; border-radius: 9px;
+    object-fit: cover;
+    box-shadow: 0 6px 16px rgba(139, 107, 248, 0.34);
   }
   .about-brand b { font-size: 15px; color: #fff; margin-right: 8px; }
   .about-brand span { font-size: 12.5px; color: var(--text-secondary); }
