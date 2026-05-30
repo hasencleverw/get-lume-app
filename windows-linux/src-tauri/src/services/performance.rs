@@ -61,39 +61,31 @@ pub fn flush_dns() -> TaskOutcome {
     }
 }
 
-/// Spawn an elevated `powershell -Command` and wait for it. On Windows this
-/// triggers the UAC prompt — the user explicitly authorizes this single
-/// action. Mirrors the macOS `osascript with administrator privileges`
-/// and the Linux `pkexec` pattern: only the operation itself is elevated,
-/// the host process keeps running unprivileged.
+/// Elevate via the `runas` crate which calls `ShellExecuteExW` with verb
+/// `runas` under the hood — the native Win32 mechanism for UAC. We
+/// deliberately avoid PowerShell wrappers because that pattern (`powershell
+/// + Start-Process + Hidden`) is heavily flagged by Defender heuristics on
+/// unsigned binaries.
 #[cfg(target_os = "windows")]
-fn run_elevated_ps(inner: &str) -> Result<(), String> {
-    // The outer powershell wraps the elevated launch. We capture the elevated
-    // process exit code via -PassThru/-Wait. If the user cancels the UAC
-    // dialog, Start-Process throws — we catch it and return a friendly error.
-    let wrapper = format!(
-        "try {{ \
-            $p = Start-Process powershell -ArgumentList '-NoProfile','-WindowStyle','Hidden','-Command',\"{}\" -Verb RunAs -Wait -PassThru -ErrorAction Stop; \
-            exit $p.ExitCode \
-         }} catch {{ exit 1223 }}",  // 1223 = ERROR_CANCELLED
-        inner.replace('"', "`\"")
-    );
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", &wrapper])
-        .status();
-    match result {
+fn elevate(exe: &str, args: &[&str]) -> Result<(), String> {
+    let mut cmd = runas::Command::new(exe);
+    for a in args { cmd.arg(a); }
+    // `gui(true)` runs the elevated child without spawning a visible cmd
+    // window — but unlike PowerShell's `-WindowStyle Hidden`, this maps to
+    // the standard `SW_HIDE` ShellExecute flag, not a flagged pattern.
+    cmd.gui(true);
+    match cmd.status() {
         Ok(s) if s.success() => Ok(()),
-        Ok(s) if s.code() == Some(1223) => Err("Autorização UAC negada pelo usuário".into()),
         Ok(s) => Err(format!("comando saiu com código {:?}", s.code())),
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(format!("autorização negada ou falha ao elevar: {e}")),
     }
 }
 
 #[cfg(target_os = "windows")]
 pub fn restart_search_index() -> TaskOutcome {
-    // Restart-Service handles stop+start atomically and tolerates
-    // already-stopped services without erroring out.
-    match run_elevated_ps("Restart-Service WSearch -Force") {
+    // cmd.exe with `&` runs both regardless of the first result — tolerates
+    // service already stopped without throwing.
+    match elevate("cmd.exe", &["/c", "net stop WSearch & net start WSearch"]) {
         Ok(_) => TaskOutcome::ok("Windows Search reiniciado"),
         Err(e) => TaskOutcome::err(e),
     }
@@ -130,10 +122,7 @@ pub fn rebuild_font_cache() -> TaskOutcome {
 
 #[cfg(target_os = "windows")]
 pub fn rebuild_font_cache() -> TaskOutcome {
-    // Restart Windows Font Cache service. UAC prompt is shown by the
-    // run_elevated_ps helper, so the user authorizes this single action
-    // without needing to relaunch the whole app as administrator.
-    match run_elevated_ps("Restart-Service FontCache -Force") {
+    match elevate("cmd.exe", &["/c", "net stop FontCache & net start FontCache"]) {
         Ok(_) => TaskOutcome::ok("Serviço Font Cache reiniciado"),
         Err(e) => TaskOutcome::err(e),
     }
