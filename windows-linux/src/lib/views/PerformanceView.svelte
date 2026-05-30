@@ -66,7 +66,7 @@
     {
       id: 'fonts',
       title: 'Reiniciar Font Cache',
-      description: 'net stop/start FontCache — requer admin',
+      description: 'Reinicia o serviço FontCache (UAC vai pedir autorização)',
       icon: 'M4 7l5-5h12v22H4V7z M9 2v5H4',
       run: performanceApi.rebuildFonts
     },
@@ -80,7 +80,7 @@
     {
       id: 'search',
       title: 'Reiniciar Windows Search',
-      description: 'net stop/start WSearch — requer admin',
+      description: 'Reinicia o serviço Windows Search (UAC vai pedir autorização)',
       icon: 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z M12 8v4l3 2',
       run: performanceApi.restartSearchIndex
     },

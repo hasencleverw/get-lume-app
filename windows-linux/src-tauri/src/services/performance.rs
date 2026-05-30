@@ -83,11 +83,14 @@ fn elevate(exe: &str, args: &[&str]) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 pub fn restart_search_index() -> TaskOutcome {
-    // cmd.exe with `&` runs both regardless of the first result — tolerates
-    // service already stopped without throwing.
-    match elevate("cmd.exe", &["/c", "net stop WSearch & net start WSearch"]) {
+    // Same robustness pattern as rebuild_font_cache: trust the post-state,
+    // not the intermediate stop/start exit codes.
+    match elevate("cmd.exe", &[
+        "/c",
+        "sc stop WSearch >nul 2>&1 & sc start WSearch >nul 2>&1 & sc query WSearch | findstr /C:\"RUNNING\" >nul"
+    ]) {
         Ok(_) => TaskOutcome::ok("Windows Search reiniciado"),
-        Err(e) => TaskOutcome::err(e),
+        Err(_) => TaskOutcome::err("Falha ao reiniciar (autorização UAC negada ou serviço bloqueado)"),
     }
 }
 
@@ -122,9 +125,16 @@ pub fn rebuild_font_cache() -> TaskOutcome {
 
 #[cfg(target_os = "windows")]
 pub fn rebuild_font_cache() -> TaskOutcome {
-    match elevate("cmd.exe", &["/c", "net stop FontCache & net start FontCache"]) {
+    // Modern Windows triggers FontCache automatically — net stop/start can
+    // report failure even when the service ends up running. We stop+start
+    // best-effort and trust the final `sc query` result: if it ends RUNNING,
+    // we shipped. The `>nul 2>&1` swallows noisy stderr.
+    match elevate("cmd.exe", &[
+        "/c",
+        "sc stop FontCache >nul 2>&1 & sc start FontCache >nul 2>&1 & sc query FontCache | findstr /C:\"RUNNING\" >nul"
+    ]) {
         Ok(_) => TaskOutcome::ok("Serviço Font Cache reiniciado"),
-        Err(e) => TaskOutcome::err(e),
+        Err(_) => TaskOutcome::err("Falha ao reiniciar (autorização UAC negada ou serviço bloqueado)"),
     }
 }
 
