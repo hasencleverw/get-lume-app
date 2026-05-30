@@ -2,7 +2,7 @@
 .DS_Store
 .AppleDouble
 .LSOverride
-Icon?
+# Icon\r (Classic Mac OS) — keep with literal CR if you really need it
 ._*
 .Spotlight-V100
 .Trashes
