@@ -32,3 +32,6 @@ build/
 
 # Logs
 *.log
+
+# Local Cargo config (cross-compile paths são específicos da máquina)
+windows-linux/src-tauri/.cargo/
