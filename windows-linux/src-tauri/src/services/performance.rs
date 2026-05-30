@@ -61,13 +61,41 @@ pub fn flush_dns() -> TaskOutcome {
     }
 }
 
+/// Spawn an elevated `powershell -Command` and wait for it. On Windows this
+/// triggers the UAC prompt — the user explicitly authorizes this single
+/// action. Mirrors the macOS `osascript with administrator privileges`
+/// and the Linux `pkexec` pattern: only the operation itself is elevated,
+/// the host process keeps running unprivileged.
+#[cfg(target_os = "windows")]
+fn run_elevated_ps(inner: &str) -> Result<(), String> {
+    // The outer powershell wraps the elevated launch. We capture the elevated
+    // process exit code via -PassThru/-Wait. If the user cancels the UAC
+    // dialog, Start-Process throws — we catch it and return a friendly error.
+    let wrapper = format!(
+        "try {{ \
+            $p = Start-Process powershell -ArgumentList '-NoProfile','-WindowStyle','Hidden','-Command',\"{}\" -Verb RunAs -Wait -PassThru -ErrorAction Stop; \
+            exit $p.ExitCode \
+         }} catch {{ exit 1223 }}",  // 1223 = ERROR_CANCELLED
+        inner.replace('"', "`\"")
+    );
+    let result = Command::new("powershell")
+        .args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", &wrapper])
+        .status();
+    match result {
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) if s.code() == Some(1223) => Err("Autorização UAC negada pelo usuário".into()),
+        Ok(s) => Err(format!("comando saiu com código {:?}", s.code())),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[cfg(target_os = "windows")]
 pub fn restart_search_index() -> TaskOutcome {
-    let stop = Command::new("net").args(&["stop", "WSearch"]).status();
-    let start = Command::new("net").args(&["start", "WSearch"]).status();
-    match (stop, start) {
-        (Ok(_), Ok(s)) if s.success() => TaskOutcome::ok("Windows Search reiniciado"),
-        _ => TaskOutcome::err("Requer privilégios de administrador"),
+    // Restart-Service handles stop+start atomically and tolerates
+    // already-stopped services without erroring out.
+    match run_elevated_ps("Restart-Service WSearch -Force") {
+        Ok(_) => TaskOutcome::ok("Windows Search reiniciado"),
+        Err(e) => TaskOutcome::err(e),
     }
 }
 
@@ -102,13 +130,12 @@ pub fn rebuild_font_cache() -> TaskOutcome {
 
 #[cfg(target_os = "windows")]
 pub fn rebuild_font_cache() -> TaskOutcome {
-    // Restart Windows Font Cache service. Requires admin; cmd net stop/start
-    // returns non-zero when not elevated, which we surface to the user.
-    let stop = Command::new("net").args(&["stop", "FontCache"]).status();
-    let start = Command::new("net").args(&["start", "FontCache"]).status();
-    match (stop, start) {
-        (Ok(_), Ok(s)) if s.success() => TaskOutcome::ok("Serviço Font Cache reiniciado"),
-        _ => TaskOutcome::err("Requer privilégios de administrador"),
+    // Restart Windows Font Cache service. UAC prompt is shown by the
+    // run_elevated_ps helper, so the user authorizes this single action
+    // without needing to relaunch the whole app as administrator.
+    match run_elevated_ps("Restart-Service FontCache -Force") {
+        Ok(_) => TaskOutcome::ok("Serviço Font Cache reiniciado"),
+        Err(e) => TaskOutcome::err(e),
     }
 }
 
