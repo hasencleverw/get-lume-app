@@ -1,6 +1,6 @@
 //! Windows host glue. Stubs only — implemented in the Windows port phase.
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use std::path::{Path, PathBuf};
 
 pub fn free_system_memory() -> Result<()> {
@@ -67,10 +67,50 @@ pub fn distro_pretty_name() -> String {
     "Windows".into()
 }
 
+// ===========================================================================
+// Autostart via HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+// ===========================================================================
+//
+// Per-user autostart. Writing here doesn't require admin (no UAC prompt) and
+// is the same place Task Manager → Startup reads. We use `HKEY_CURRENT_USER`
+// so the toggle is local to the signed-in user.
+
+const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+const VALUE_NAME: &str = "Lume";
+
 pub fn is_autostart_enabled() -> bool {
-    false // implemented in the Windows phase via HKCU\…\Run
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let Ok(run) = hkcu.open_subkey(RUN_KEY) else { return false };
+    let val: Result<String, _> = run.get_value(VALUE_NAME);
+    val.is_ok()
 }
 
-pub fn set_autostart(_enabled: bool) -> Result<()> {
-    Err(anyhow!("Windows autostart not implemented yet"))
+pub fn set_autostart(enabled: bool) -> Result<()> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_SET_VALUE};
+    use winreg::RegKey;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if enabled {
+        let exe = std::env::current_exe().context("getting current_exe")?;
+        // Quote so Windows handles spaces in the path correctly.
+        let cmd = format!("\"{}\"", exe.display());
+        let (run, _) = hkcu
+            .create_subkey(RUN_KEY)
+            .context("open Run key for write")?;
+        run.set_value(VALUE_NAME, &cmd)
+            .context("write Lume value")?;
+    } else {
+        // delete_value returns NotFound if it's already not there — we treat
+        // that as success because the end state matches what the caller asked.
+        let run = hkcu
+            .open_subkey_with_flags(RUN_KEY, KEY_SET_VALUE)
+            .context("open Run key for delete")?;
+        match run.delete_value(VALUE_NAME) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(anyhow!(e).context("delete Lume value")),
+        }
+    }
+    Ok(())
 }

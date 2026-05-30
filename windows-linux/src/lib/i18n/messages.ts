@@ -82,7 +82,8 @@ export const messages = {
 
     'settings.general.title':                'Geral',
     'settings.general.autostart':            'Iniciar com o sistema',
-    'settings.general.autostartDesc':        'Cria <code>~/.config/autostart/lume.desktop</code>',
+    'settings.general.autostartDesc.linux':  'Cria <code>~/.config/autostart/lume.desktop</code>',
+    'settings.general.autostartDesc.windows':'Registra entrada em <code>HKCU\\…\\Run</code>',
     'settings.general.closeToTray':          'Fechar minimiza para a bandeja',
     'settings.general.closeToTrayDesc':      'Quando desativado, clicar no X fecha o app de verdade',
     'settings.general.language':             'Idioma',
@@ -204,7 +205,8 @@ export const messages = {
 
     'settings.general.title':                'General',
     'settings.general.autostart':            'Start with system',
-    'settings.general.autostartDesc':        'Creates <code>~/.config/autostart/lume.desktop</code>',
+    'settings.general.autostartDesc.linux':  'Creates <code>~/.config/autostart/lume.desktop</code>',
+    'settings.general.autostartDesc.windows':'Registers entry in <code>HKCU\\…\\Run</code>',
     'settings.general.closeToTray':          'Close minimizes to tray',
     'settings.general.closeToTrayDesc':      'When disabled, clicking X actually quits the app',
     'settings.general.language':             'Language',

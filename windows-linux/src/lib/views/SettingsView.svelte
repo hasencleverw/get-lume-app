@@ -6,6 +6,7 @@
   import { updater } from '$lib/stores/updater.svelte';
   import { navigation } from '$lib/stores/navigation.svelte';
   import { i18n } from '$lib/stores/i18n.svelte';
+  import { platform } from '$lib/stores/platform.svelte';
   import type { Language } from '$lib/services/system';
 
   const LANGUAGES: { id: Language; label: string }[] = [
@@ -171,7 +172,7 @@
       <div class="row">
         <div class="row-text">
           <span class="row-title">{i18n.t('settings.general.autostart')}</span>
-          <span class="row-desc">{@html i18n.t('settings.general.autostartDesc')}</span>
+          <span class="row-desc">{@html i18n.t(platform.isWindows ? 'settings.general.autostartDesc.windows' : 'settings.general.autostartDesc.linux')}</span>
         </div>
         <button class="toggle" class:on={settings.autostart} onclick={() => settings.setAutostart(!settings.autostart)} aria-label={i18n.t('settings.general.autostart')}>
           <span class="knob"></span>
