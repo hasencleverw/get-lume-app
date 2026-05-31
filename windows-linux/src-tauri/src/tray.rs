@@ -24,13 +24,16 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
         .items(&[&show_item, &hide_item, &separator, &quit_item])
         .build()?;
 
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .expect("missing default window icon");
+    // Use a small, tray-sized icon embedded at compile time. The default
+    // window icon is 512px and renders oversized / inconsistent next to other
+    // system-tray items (especially with libayatana-appindicator on Linux).
+    // A 32px source scales cleanly to the 22-24px tray slot.
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))
+        .expect("embedded tray icon must decode");
 
     let _ = TrayIconBuilder::with_id("lume-main")
         .icon(icon)
+        .icon_as_template(false)
         .tooltip("Lume")
         .menu(&menu)
         .show_menu_on_left_click(false)

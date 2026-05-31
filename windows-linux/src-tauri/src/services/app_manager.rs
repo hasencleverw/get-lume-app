@@ -39,16 +39,14 @@ pub struct AppEntry {
 
 #[cfg(target_os = "linux")]
 pub fn list_apps() -> Vec<AppEntry> {
+    // We deliberately list GUI applications (apps the user recognizes), not raw
+    // distro packages. Enumerating pacman/dpkg/rpm directly would surface 1000+
+    // libraries and dependencies — noise no one wants to scroll through. So the
+    // sources are: Flatpak, Snap, and freedesktop .desktop entries. When the
+    // user removes a .desktop-sourced app, `uninstall` resolves the owning
+    // native package on the fly (pacman -Qoq / dpkg -S / rpm -qf).
     let mut apps: Vec<AppEntry> = Vec::new();
     let mut seen = HashSet::new();
-
-    if which("pacman") {
-        apps.extend(pacman_apps());
-    } else if which("dpkg-query") {
-        apps.extend(dpkg_apps());
-    } else if which("rpm") {
-        apps.extend(rpm_apps());
-    }
 
     if which("flatpak") {
         apps.extend(flatpak_apps());
@@ -182,9 +180,61 @@ pub fn uninstall(source: AppSource, id: &str) -> anyhow::Result<()> {
             c.args(["snap", "remove", id]);
             run(c)
         }
-        AppSource::Desktop => Err(anyhow::anyhow!(
-            "Apps registrados apenas via .desktop precisam ser removidos manualmente"
-        )),
+        AppSource::Desktop => {
+            // `id` is the absolute path to the .desktop file. Resolve which
+            // package owns it (pacman/dpkg/rpm) and remove that package. If the
+            // file belongs to no package (a manually-dropped .desktop in
+            // ~/.local/share/applications), just delete the file itself.
+            let path = std::path::Path::new(id);
+
+            if which("pacman") {
+                if let Ok(out) = Command::new("pacman").args(["-Qoq", id]).env("LC_ALL", "C").output() {
+                    if out.status.success() {
+                        let pkg = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        if !pkg.is_empty() {
+                            let mut c = Command::new("pkexec");
+                            c.args(["pacman", "-Rns", "--noconfirm", &pkg]);
+                            return run(c);
+                        }
+                    }
+                }
+            } else if which("dpkg") {
+                if let Ok(out) = Command::new("dpkg").args(["-S", id]).env("LC_ALL", "C").output() {
+                    if out.status.success() {
+                        let line = String::from_utf8_lossy(&out.stdout);
+                        if let Some(pkg) = line.split(':').next().map(|s| s.trim().to_string()) {
+                            if !pkg.is_empty() {
+                                let mut c = Command::new("pkexec");
+                                c.args(["apt-get", "remove", "--purge", "-y", &pkg]);
+                                return run(c);
+                            }
+                        }
+                    }
+                }
+            } else if which("rpm") {
+                if let Ok(out) = Command::new("rpm").args(["-qf", id]).env("LC_ALL", "C").output() {
+                    if out.status.success() {
+                        let pkg = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        if !pkg.is_empty() && !pkg.contains("not owned") {
+                            let mut c = Command::new("pkexec");
+                            c.args(["dnf", "remove", "-y", &pkg]);
+                            return run(c);
+                        }
+                    }
+                }
+            }
+
+            // Orphan .desktop — owned by no package. Delete the file directly
+            // when it's user-writable; otherwise it needs root we won't assume.
+            if path.starts_with(dirs::home_dir().unwrap_or_default()) {
+                std::fs::remove_file(path)
+                    .map_err(|e| anyhow::anyhow!("falha ao remover atalho: {e}"))
+            } else {
+                Err(anyhow::anyhow!(
+                    "Este app não pertence a nenhum pacote conhecido — remova manualmente"
+                ))
+            }
+        }
         AppSource::Windows => Err(anyhow::anyhow!("Pacotes Windows não desinstaláveis no Linux")),
     }
 }
@@ -206,11 +256,19 @@ pub fn uninstall(_source: AppSource, id: &str) -> anyhow::Result<()> {
 }
 
 // --- Source backends -------------------------------------------------------
+//
+// pacman_apps/dpkg_apps/rpm_apps are kept for a possible future "system
+// packages" view but are not part of the default app listing (which shows GUI
+// apps only). Marked allow(dead_code) so they don't warn while unused.
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 fn pacman_apps() -> Vec<AppEntry> {
-    // -Qi prints multi-line records, blank-separated.
-    let Ok(out) = Command::new("pacman").args(["-Qi"]).output() else { return vec![] };
+    // -Qi prints multi-line records, blank-separated. LC_ALL=C forces English
+    // field labels (Name/Version/Description/Installed Size) — without it, a
+    // localized system (e.g. pt_BR prints "Nome"/"Versão") makes every record
+    // parse to an empty name and get silently dropped.
+    let Ok(out) = Command::new("pacman").args(["-Qi"]).env("LC_ALL", "C").output() else { return vec![] };
     if !out.status.success() { return vec![]; }
     let text = String::from_utf8_lossy(&out.stdout);
 
@@ -252,6 +310,7 @@ fn pacman_apps() -> Vec<AppEntry> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 fn dpkg_apps() -> Vec<AppEntry> {
     let Ok(out) = Command::new("dpkg-query")
         .args(["-W", "-f", "${Package}\t${Version}\t${Installed-Size}\t${binary:Summary}\n"])
@@ -271,6 +330,7 @@ fn dpkg_apps() -> Vec<AppEntry> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 fn rpm_apps() -> Vec<AppEntry> {
     let Ok(out) = Command::new("rpm")
         .args(["-qa", "--queryformat", "%{NAME}\t%{VERSION}\t%{SIZE}\t%{SUMMARY}\n"])
@@ -369,10 +429,12 @@ fn desktop_apps() -> Vec<AppEntry> {
 
 // --- parsing helpers -------------------------------------------------------
 
+#[allow(dead_code)]
 fn field(s: &str) -> String {
     s.split_once(':').map(|(_, v)| v.trim().to_string()).unwrap_or_else(|| s.trim().to_string())
 }
 
+#[allow(dead_code)]
 fn parse_pacman_size(s: &str) -> u64 {
     // "12.34 MiB" / "456.78 KiB" / "9.0 B"
     let s = s.trim();
