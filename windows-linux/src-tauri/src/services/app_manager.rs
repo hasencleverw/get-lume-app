@@ -132,19 +132,61 @@ pub fn list_apps() -> Vec<AppEntry> {
 
 #[cfg(target_os = "linux")]
 pub fn uninstall(source: AppSource, id: &str) -> anyhow::Result<()> {
-    let status = match source {
-        AppSource::Pacman => Command::new("pkexec").args(["pacman", "-Rns", "--noconfirm", id]).status(),
-        AppSource::Dpkg => Command::new("pkexec").args(["apt-get", "remove", "--purge", "-y", id]).status(),
-        AppSource::Rpm => Command::new("pkexec").args(["dnf", "remove", "-y", id]).status(),
-        AppSource::Flatpak => Command::new("flatpak").args(["uninstall", "-y", id]).status(),
-        AppSource::Snap => Command::new("pkexec").args(["snap", "remove", id]).status(),
-        AppSource::Desktop => return Err(anyhow::anyhow!("Apps registrados apenas via .desktop precisam ser removidos manualmente")),
-        AppSource::Windows => return Err(anyhow::anyhow!("Pacotes Windows não desinstaláveis no Linux")),
-    }?;
-    if !status.success() {
-        return Err(anyhow::anyhow!("uninstaller saiu com código {:?}", status.code()));
+    // Helper: run a command, capture stderr, surface a useful message on
+    // failure instead of a bare exit code.
+    fn run(mut cmd: Command) -> anyhow::Result<()> {
+        let out = cmd.output()?;
+        if out.status.success() {
+            return Ok(());
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let msg = stderr.trim().lines().last()
+            .or_else(|| stdout.trim().lines().last())
+            .unwrap_or("falha desconhecida")
+            .to_string();
+        Err(anyhow::anyhow!("{}", msg))
     }
-    Ok(())
+
+    match source {
+        AppSource::Pacman => {
+            let mut c = Command::new("pkexec");
+            c.args(["pacman", "-Rns", "--noconfirm", id]);
+            run(c)
+        }
+        AppSource::Dpkg => {
+            let mut c = Command::new("pkexec");
+            c.args(["apt-get", "remove", "--purge", "-y", id]);
+            run(c)
+        }
+        AppSource::Rpm => {
+            let mut c = Command::new("pkexec");
+            c.args(["dnf", "remove", "-y", id]);
+            run(c)
+        }
+        AppSource::Flatpak => {
+            // Flatpak apps can be installed per-user or system-wide. Try the
+            // user scope first (no auth needed); if that says "not installed",
+            // fall back to system scope via pkexec. `-y` = --assumeyes.
+            let mut user = Command::new("flatpak");
+            user.args(["uninstall", "--user", "-y", id]);
+            if run(user).is_ok() {
+                return Ok(());
+            }
+            let mut system = Command::new("pkexec");
+            system.args(["flatpak", "uninstall", "--system", "-y", id]);
+            run(system)
+        }
+        AppSource::Snap => {
+            let mut c = Command::new("pkexec");
+            c.args(["snap", "remove", id]);
+            run(c)
+        }
+        AppSource::Desktop => Err(anyhow::anyhow!(
+            "Apps registrados apenas via .desktop precisam ser removidos manualmente"
+        )),
+        AppSource::Windows => Err(anyhow::anyhow!("Pacotes Windows não desinstaláveis no Linux")),
+    }
 }
 
 #[cfg(target_os = "windows")]

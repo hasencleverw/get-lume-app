@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ask } from '@tauri-apps/plugin-dialog';
   import { appsApi, type AppEntry, type AppSource } from '$lib/services/system';
   import { formatBytes } from '$lib/services/format';
 
@@ -49,7 +50,14 @@
   });
 
   async function remove(a: AppEntry) {
-    if (!confirm(`Desinstalar "${a.name}"?`)) return;
+    // Native window.confirm() is unreliable inside the WebView (WebKitGTK
+    // returns false, WebView2 may block it). Use Tauri's dialog plugin which
+    // renders a real native confirmation on every platform.
+    const ok = await ask(`Desinstalar "${a.name}"?`, {
+      title: 'Confirmar desinstalação',
+      kind: 'warning'
+    });
+    if (!ok) return;
     working = a.id;
     error = null;
     try {

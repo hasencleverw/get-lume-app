@@ -58,8 +58,10 @@ impl PartialOrd for HeapEntry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> { Some(self.cmp(other)) }
 }
 
-pub fn scan_largest(root: &Path, limit: usize, kinds: &[FileKind]) -> Vec<BigFile> {
+pub fn scan_largest(root: &Path, limit: usize, kinds: &[FileKind], min_size_bytes: u64) -> Vec<BigFile> {
     let filter_kinds = if kinds.is_empty() { None } else { Some(kinds) };
+    // Floor at 1 MB to keep the walk cheap regardless of the slider value.
+    let min_size = min_size_bytes.max(1024 * 1024);
     let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::with_capacity(limit + 1);
 
     let walker = WalkDir::new(root)
@@ -87,7 +89,7 @@ pub fn scan_largest(root: &Path, limit: usize, kinds: &[FileKind]) -> Vec<BigFil
             if !k.contains(&kind) { continue; }
         }
         let size = md.len();
-        if size < 1024 * 1024 { continue; } // ignore < 1 MB to keep noise low
+        if size < min_size { continue; }
 
         let modified = md
             .modified()

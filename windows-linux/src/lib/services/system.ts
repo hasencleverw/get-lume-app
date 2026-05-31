@@ -102,8 +102,8 @@ export const diskApi = {
 };
 
 export const largeFilesApi = {
-  scan: (root: string | null, limit = 100, kinds: FileKind[] = []) =>
-    invoke<BigFile[]>('scan_largest', { root, limit, kinds })
+  scan: (root: string | null, limit = 100, kinds: FileKind[] = [], minSizeMb = 1) =>
+    invoke<BigFile[]>('scan_largest', { root, limit, kinds, minSizeMb })
 };
 
 export const appsApi = {
