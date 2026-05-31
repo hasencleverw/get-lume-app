@@ -24,11 +24,12 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
         .items(&[&show_item, &hide_item, &separator, &quit_item])
         .build()?;
 
-    // Use a small, tray-sized icon embedded at compile time. The default
-    // window icon is 512px and renders oversized / inconsistent next to other
-    // system-tray items (especially with libayatana-appindicator on Linux).
-    // A 32px source scales cleanly to the 22-24px tray slot.
-    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))
+    // Dedicated tray icon: the Lume wisp on a transparent canvas occupying
+    // ~56% of the frame. AppIndicator (Linux) and the Windows tray scale the
+    // whole image to the panel height — using the full-bleed app icon made
+    // Lume look noticeably larger than neighboring items. The transparent
+    // margin baked into tray.png makes it visually match the others.
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
         .expect("embedded tray icon must decode");
 
     let _ = TrayIconBuilder::with_id("lume-main")
