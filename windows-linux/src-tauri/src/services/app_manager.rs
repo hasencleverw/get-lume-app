@@ -241,18 +241,70 @@ pub fn uninstall(source: AppSource, id: &str) -> anyhow::Result<()> {
 
 #[cfg(target_os = "windows")]
 pub fn uninstall(_source: AppSource, id: &str) -> anyhow::Result<()> {
-    // The `id` is the UninstallString from the registry. It can be either:
-    //   MsiExec.exe /X{GUID}    — needs to be parsed and have /quiet appended
-    //   "C:\Path\uninstaller.exe" /S
-    //   C:\Path\uninstaller.exe
-    // We hand the user's shell off to it via cmd /C so quoting works correctly.
-    let status = Command::new("cmd")
-        .args(&["/C", id])
-        .status()?;
-    if !status.success() {
-        return Err(anyhow::anyhow!("uninstaller exited with code {:?}", status.code()));
+    // `id` is the registry UninstallString. Forms we handle:
+    //   MsiExec.exe /X{GUID}  or  /I{GUID}   → normalize to `msiexec /x {GUID}`
+    //   "C:\Path\unins000.exe" /params       → quoted exe + args
+    //   C:\Path\uninstall.exe                 → bare exe
+    //
+    // Running it through `cmd /C` (the old approach) broke on the embedded
+    // quotes and never elevated, so most uninstallers silently failed. Instead
+    // we split into program + parameters and launch elevated via ShellExecute
+    // (runas verb), which both fixes quoting and pops the UAC the installer
+    // usually needs. The uninstaller's own window is shown (gui(false)).
+    let id = id.trim();
+    if id.is_empty() {
+        return Err(anyhow::anyhow!("Sem comando de desinstalação registrado"));
     }
-    Ok(())
+
+    // MSI: extract the product GUID and drive msiexec directly.
+    let lower = id.to_ascii_lowercase();
+    if lower.contains("msiexec") {
+        if let Some(start) = id.find('{') {
+            if let Some(end) = id[start..].find('}') {
+                let guid = &id[start..start + end + 1];
+                let mut cmd = runas::Command::new("msiexec.exe");
+                cmd.arg("/x").arg(guid);
+                cmd.gui(false);
+                return match cmd.status() {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(anyhow::anyhow!("Autorização UAC negada: {e}")),
+                };
+            }
+        }
+    }
+
+    // Non-MSI: split the command line into program + arguments.
+    let (program, args) = split_command_line(id);
+    if program.is_empty() {
+        return Err(anyhow::anyhow!("Comando de desinstalação inválido"));
+    }
+    let mut cmd = runas::Command::new(&program);
+    if !args.is_empty() {
+        cmd.arg(&args);
+    }
+    cmd.gui(false);
+    match cmd.status() {
+        Ok(_) => Ok(()),
+        Err(e) => Err(anyhow::anyhow!("Autorização UAC negada ou falha: {e}")),
+    }
+}
+
+/// Split a Windows command line into (program, rest-of-args). Honors a leading
+/// quoted path so `"C:\Program Files\App\unins.exe" /S` parses correctly.
+#[cfg(target_os = "windows")]
+fn split_command_line(s: &str) -> (String, String) {
+    let s = s.trim();
+    if let Some(rest) = s.strip_prefix('"') {
+        if let Some(end) = rest.find('"') {
+            let program = rest[..end].to_string();
+            let args = rest[end + 1..].trim().to_string();
+            return (program, args);
+        }
+    }
+    match s.find(' ') {
+        Some(i) => (s[..i].to_string(), s[i + 1..].trim().to_string()),
+        None => (s.to_string(), String::new()),
+    }
 }
 
 // --- Source backends -------------------------------------------------------

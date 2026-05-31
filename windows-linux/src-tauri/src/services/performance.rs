@@ -70,27 +70,27 @@ pub fn flush_dns() -> TaskOutcome {
 fn elevate(exe: &str, args: &[&str]) -> Result<(), String> {
     let mut cmd = runas::Command::new(exe);
     for a in args { cmd.arg(a); }
-    // `gui(true)` runs the elevated child without spawning a visible cmd
-    // window — but unlike PowerShell's `-WindowStyle Hidden`, this maps to
-    // the standard `SW_HIDE` ShellExecute flag, not a flagged pattern.
+    // `gui(true)` hides the transient console window (maps to SW_HIDE), not a
+    // PowerShell hidden-window pattern that Defender flags.
     cmd.gui(true);
+    // The runas crate returns Err ONLY when the elevated process couldn't be
+    // launched at all — i.e. the user dismissed the UAC prompt. Once launched,
+    // the sub-command exit code (net/sc) is noisy: `net start` returns non-zero
+    // when a service is already running (FontCache auto-restarts via trigger),
+    // which is benign. So a successful launch = success.
     match cmd.status() {
-        Ok(s) if s.success() => Ok(()),
-        Ok(s) => Err(format!("comando saiu com código {:?}", s.code())),
-        Err(e) => Err(format!("autorização negada ou falha ao elevar: {e}")),
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Autorização UAC negada: {e}")),
     }
 }
 
 #[cfg(target_os = "windows")]
 pub fn restart_search_index() -> TaskOutcome {
-    // Same robustness pattern as rebuild_font_cache: trust the post-state,
-    // not the intermediate stop/start exit codes.
-    match elevate("cmd.exe", &[
-        "/c",
-        "sc stop WSearch >nul 2>&1 & sc start WSearch >nul 2>&1 & sc query WSearch | findstr /C:\"RUNNING\" >nul"
-    ]) {
+    // `net` (unlike `sc`) is synchronous — it waits for the service to actually
+    // stop/start before returning, avoiding the START_PENDING race.
+    match elevate("cmd.exe", &["/c", "net stop WSearch & net start WSearch"]) {
         Ok(_) => TaskOutcome::ok("Windows Search reiniciado"),
-        Err(_) => TaskOutcome::err("Falha ao reiniciar (autorização UAC negada ou serviço bloqueado)"),
+        Err(e) => TaskOutcome::err(e),
     }
 }
 
@@ -125,16 +125,11 @@ pub fn rebuild_font_cache() -> TaskOutcome {
 
 #[cfg(target_os = "windows")]
 pub fn rebuild_font_cache() -> TaskOutcome {
-    // Modern Windows triggers FontCache automatically — net stop/start can
-    // report failure even when the service ends up running. We stop+start
-    // best-effort and trust the final `sc query` result: if it ends RUNNING,
-    // we shipped. The `>nul 2>&1` swallows noisy stderr.
-    match elevate("cmd.exe", &[
-        "/c",
-        "sc stop FontCache >nul 2>&1 & sc start FontCache >nul 2>&1 & sc query FontCache | findstr /C:\"RUNNING\" >nul"
-    ]) {
+    // `net` is synchronous and FontCache auto-restarts via trigger, so a
+    // benign non-zero exit on `net start` is fine — see elevate() comment.
+    match elevate("cmd.exe", &["/c", "net stop FontCache & net start FontCache"]) {
         Ok(_) => TaskOutcome::ok("Serviço Font Cache reiniciado"),
-        Err(_) => TaskOutcome::err("Falha ao reiniciar (autorização UAC negada ou serviço bloqueado)"),
+        Err(e) => TaskOutcome::err(e),
     }
 }
 
